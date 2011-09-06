@@ -25,12 +25,16 @@
 // Author: Hadrien Courtecuisse
 //
 // Copyright: See COPYING file that comes with this distribution
-#include <sofa/component/linearsolver/SparseCholeskySolver.h>
+#include <sofa/component/linearsolver/SparseLUSolver.h>
 #include <sofa/core/visual/VisualParams.h>
 #include <sofa/core/ObjectFactory.h>
-#include <sofa/helper/system/thread/CTime.h>
 #include <iostream>
+#include "sofa/helper/system/thread/CTime.h"
+#include <sofa/core/objectmodel/BaseContext.h>
+#include <sofa/core/behavior/LinearSolver.h>
 #include <math.h>
+#include <sofa/helper/system/thread/CTime.h>
+#include <sofa/component/linearsolver/CompressedRowSparseMatrix.h>
 
 namespace sofa
 {
@@ -51,104 +55,76 @@ using std::cerr;
 using std::endl;
 
 template<class TMatrix, class TVector>
-SparseCholeskySolver<TMatrix,TVector>::SparseCholeskySolver()
+SparseLUSolver<TMatrix,TVector>::SparseLUSolver()
     : f_verbose( initData(&f_verbose,false,"verbose","Dump system state at each iteration") )
-    , S(NULL), N(NULL)
+    , f_tol( initData(&f_tol,0.001,"tolerance","tolerance of factorization") )
+    , S(NULL), N(NULL), tmp(NULL)
 {
 }
 
 template<class TMatrix, class TVector>
-SparseCholeskySolver<TMatrix,TVector>::~SparseCholeskySolver()
+SparseLUSolver<TMatrix,TVector>::~SparseLUSolver()
 {
     if (S) cs_sfree (S);
     if (N) cs_nfree (N);
+    if (tmp) cs_free (tmp);
 }
 
+
 template<class TMatrix, class TVector>
-void SparseCholeskySolver<TMatrix,TVector>::solveT(double * z, double * r)
+void SparseLUSolver<TMatrix,TVector>::solve (Matrix& /*M*/, Vector& z, Vector& r)
 {
     int n = A.n;
 
-    cs_ipvec (n, S->Pinv, r, (double*) &(tmp[0]));	//x = P*b
-
-    cs_lsolve (N->L, (double*) &(tmp[0]));			//x = L\x
-    cs_ltsolve (N->L, (double*) &(tmp[0]));			//x = L'\x/
-
-    cs_pvec (n, S->Pinv, (double*) &(tmp[0]), z);	 //b = P'*x
+    cs_ipvec (n, N->Pinv, r.ptr(), tmp) ;	/* x = P*b */
+    cs_lsolve (N->L, tmp) ;		/* x = L\x */
+    cs_usolve (N->U, tmp) ;		/* x = U\x */
+    cs_ipvec (n, S->Q, tmp, z.ptr()) ;	/* b = Q*x */
 }
 
 template<class TMatrix, class TVector>
-void SparseCholeskySolver<TMatrix,TVector>::solveT(float * z, float * r)
-{
-    int n = A.n;
-    z_tmp.resize(n);
-    r_tmp.resize(n);
-    for (int i=0; i<n; i++) r_tmp[i] = (double) r[i];
-
-    cs_ipvec (n, S->Pinv, (double*) &(r_tmp[0]), (double*) &(tmp[0]));	//x = P*b
-
-    cs_lsolve (N->L, (double*) &(tmp[0]));			//x = L\x
-    cs_ltsolve (N->L, (double*) &(tmp[0]));			//x = L'\x/
-
-    cs_pvec (n, S->Pinv, (double*) &(tmp[0]), (double*) &(z_tmp[0]));	 //b = P'*x
-
-    for (int i=0; i<n; i++) z[i] = (float) z_tmp[i];
-}
-
-
-template<class TMatrix, class TVector>
-void SparseCholeskySolver<TMatrix,TVector>::solve (Matrix& /*M*/, Vector& z, Vector& r)
-{
-    solveT(z.ptr(),r.ptr());
-}
-
-template<class TMatrix, class TVector>
-void SparseCholeskySolver<TMatrix,TVector>::invert(Matrix& M)
+void SparseLUSolver<TMatrix,TVector>::invert(Matrix& M)
 {
     int order = -1; //?????
+
     if (S) cs_sfree(S);
     if (N) cs_nfree(N);
-    //if (tmp) cs_free(tmp);
+    if (tmp) cs_free(tmp);
     M.compress();
-
-    A.nzmax = M.getColsValue().size();	// maximum number of entries
-    A_p = (int *) &(M.getRowBegin()[0]);
-    A_i = (int *) &(M.getColsIndex()[0]);
-    A_x.resize(A.nzmax);
-    for (int i=0; i<A.nzmax; i++) A_x[i] = (double) M.getColsValue()[i];
     //remplir A avec M
+    A.nzmax = M.getColsValue().size();	// maximum number of entries
     A.m = M.rowBSize();					// number of rows
     A.n = M.colBSize();					// number of columns
-    A.p = A_p;							// column pointers (size n+1) or col indices (size nzmax)
-    A.i = A_i;							// row indices, size nzmax
-    A.x = (double*) &(A_x[0]);				// numerical values, size nzmax
+    A_p = M.getRowBegin();
+    A.p = (int *) &(A_p[0]);							// column pointers (size n+1) or col indices (size nzmax)
+    A_i = M.getColsIndex();
+    A.i = (int *) &(A_i[0]);							// row indices, size nzmax
+    A_x = M.getColsValue();
+    A.x = (double *) &(A_x[0]);				// numerical values, size nzmax
     A.nz = -1;							// # of entries in triplet matrix, -1 for compressed-col
     cs_dropzeros( &A );
+
     //M.check_matrix();
     //CompressedRowSparseMatrix<double>::check_matrix(-1 /*A.nzmax*/,A.m,A.n,A.p,A.i,A.x);
     //sout << "diag =";
     //for (int i=0;i<A.n;++i) sout << " " << M.element(i,i);
     //sout << sendl;
     //sout << "SparseCholeskySolver: start factorization, n = " << A.n << " nnz = " << A.p[A.n] << sendl;
-    //tmp = (double *) cs_malloc (A.n, sizeof (double)) ;
-    tmp.resize(A.n);
-    S = cs_schol (&A, order) ;		/* ordering and symbolic analysis */
-    N = cs_chol (&A, S) ;		/* numeric Cholesky factorization */
+    tmp = (double *) cs_malloc (A.n, sizeof (double)) ;
+    S = cs_sqr (&A, order, 0) ;		/* ordering and symbolic analysis */
+    N = cs_lu (&A, S, f_tol.getValue()) ;		/* numeric LU factorization */
     //sout << "SparseCholeskySolver: factorization complete, nnz = " << N->L->p[N->L->n] << sendl;
 }
 
-SOFA_DECL_CLASS(SparseCholeskySolver)
+SOFA_DECL_CLASS(SparseLUSolver)
 
-int SparseCholeskySolverClass = core::RegisterObject("Direct linear solver based on Sparse Cholesky factorization, implemented with the CSPARSE library")
-        .add< SparseCholeskySolver< CompressedRowSparseMatrix<double>,FullVector<double> > >(true)
-        .add< SparseCholeskySolver< CompressedRowSparseMatrix<float>,FullVector<float> > >()
+int SparseLUSolverClass = core::RegisterObject("Direct linear solver based on Sparse LU factorization, implemented with the CSPARSE library")
+        .add< SparseLUSolver< CompressedRowSparseMatrix<double>,FullVector<double> > >(true)
         ;
-
-template class SOFA_COMPONENT_LINEARSOLVER_API SparseCholeskySolver< CompressedRowSparseMatrix<double>,FullVector<double> >;
-template class SOFA_COMPONENT_LINEARSOLVER_API SparseCholeskySolver< CompressedRowSparseMatrix<float>,FullVector<float> >;
 
 } // namespace linearsolver
 
 } // namespace component
 
 } // namespace sofa
+
