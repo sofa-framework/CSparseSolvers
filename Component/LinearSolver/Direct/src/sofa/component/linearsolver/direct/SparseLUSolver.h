@@ -19,68 +19,69 @@
 *                                                                             *
 * Contact information: contact@sofa-framework.org                             *
 ******************************************************************************/
-#ifndef SOFA_COMPONENT_LINEARSOLVER_SPARSECHOLESKYSOLVER_H
-#define SOFA_COMPONENT_LINEARSOLVER_SPARSECHOLESKYSOLVER_H
-#include <SofaSparseSolver/config.h>
+#pragma once
+#include <sofa/component/linearsolver/direct/config.h>
 
-#include <sofa/core/behavior/LinearSolver.h>
-#include <SofaBaseLinearSolver/MatrixLinearSolver.h>
-#include <sofa/simulation/MechanicalVisitor.h>
-#include <sofa/linearalgebra/SparseMatrix.h>
-#include <sofa/linearalgebra/CompressedRowSparseMatrix.h>
-#include <sofa/helper/map.h>
-#include <cmath>
+#include <sofa/component/linearsolver/iterative/MatrixLinearSolver.h>
 #include <csparse.h>
 
-namespace sofa
+namespace sofa::component::linearsolver::direct
 {
 
-namespace component
-{
+//defaut structure for a LU factorization
+template<class Real>
+class SparseLUInvertData : public MatrixInvertData {
+public :
 
-namespace linearsolver
-{
+    css *S;
+    csn *N;
+    cs A;
+    type::vector<sofa::Index> A_i, A_p;
+    type::vector<Real> A_x;
+    Real * tmp;
+    SparseLUInvertData()
+    {
+        S=nullptr; N=nullptr; tmp=nullptr;
+    }
 
-/// Direct linear solver based on Sparse Cholesky factorization, implemented with the CSPARSE library
-template<class TMatrix, class TVector>
-class SparseCholeskySolver : public sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector>
+    ~SparseLUInvertData()
+    {
+        if (S) cs_sfree (S);
+        if (N) cs_nfree (N);
+        if (tmp) cs_free (tmp);
+    }
+};
+
+/// Direct linear solver based on Sparse LU factorization, implemented with the CSPARSE library
+template<class TMatrix, class TVector, class TThreadManager= NoThreadManager>
+class SparseLUSolver : public sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector,TThreadManager>
 {
 public:
-    SOFA_CLASS(SOFA_TEMPLATE2(SparseCholeskySolver,TMatrix,TVector),SOFA_TEMPLATE2(sofa::component::linearsolver::MatrixLinearSolver,TMatrix,TVector));
+    SOFA_CLASS(SOFA_TEMPLATE3(SparseLUSolver,TMatrix,TVector,TThreadManager),SOFA_TEMPLATE3(sofa::component::linearsolver::MatrixLinearSolver,TMatrix,TVector,TThreadManager));
 
     typedef TMatrix Matrix;
     typedef TVector Vector;
-    typedef sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector> Inherit;
+    typedef typename Matrix::Real Real;
+
+    typedef sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector,TThreadManager> Inherit;
 
     Data<bool> f_verbose; ///< Dump system state at each iteration
+    Data<double> f_tol; ///< tolerance of factorization
 
-    SparseCholeskySolver();
-    ~SparseCholeskySolver();
+    SparseLUSolver();
     void solve (Matrix& M, Vector& x, Vector& b) override;
     void invert(Matrix& M) override;
 
-public :
-    cs A;
-    css *S;
-    csn *N;
-    int * A_i;
-    int * A_p;
-    type::vector<double> A_x,z_tmp,r_tmp,tmp;
+protected :
 
-    void solveT(double * z, double * r);
-    void solveT(float * z, float * r);
+    MatrixInvertData * createInvertData() override {
+        return new SparseLUInvertData<Real>();
+    }
+
 };
 
-#if  !defined(SOFA_COMPONENT_LINEARSOLVER_SPARSECHOLESKYSOLVER_CPP)
-extern template class SOFA_SOFASPARSESOLVER_API SparseCholeskySolver< sofa::linearalgebra::CompressedRowSparseMatrix<double>, sofa::linearalgebra::FullVector<double> >;
-extern template class SOFA_SOFASPARSESOLVER_API SparseCholeskySolver< sofa::linearalgebra::CompressedRowSparseMatrix<float>, sofa::linearalgebra::FullVector<float> >;
+#if  !defined(SOFA_COMPONENT_LINEARSOLVER_SPARSELUSOLVER_CPP)
+extern template class SOFA_COMPONENT_LINEARSOLVER_DIRECT_API SparseLUSolver< sofa::linearalgebra::CompressedRowSparseMatrix< SReal>, sofa::linearalgebra::FullVector<SReal> >;
 #endif
 
-} // namespace linearsolver
-
-} // namespace component
-
-} // namespace sofa
-
-
-#endif
+} // namespace sofa::component::linearsolver::direct

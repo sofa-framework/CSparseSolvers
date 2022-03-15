@@ -19,20 +19,12 @@
 *                                                                             *
 * Contact information: contact@sofa-framework.org                             *
 ******************************************************************************/
-#define SOFA_COMPONENT_LINEARSOLVER_SPARSECHOLESKYSOLVER_CPP
-#include <SofaSparseSolver/SparseCholeskySolver.h>
-#include <sofa/core/visual/VisualParams.h>
-#include <sofa/core/ObjectFactory.h>
+#pragma once
 
-namespace sofa::component::linearsolver
+#include <sofa/component/linearsolver/direct/SparseCholeskySolver.h>
+
+namespace sofa::component::linearsolver::direct
 {
-
-using namespace sofa::defaulttype;
-using namespace sofa::core::behavior;
-using namespace sofa::simulation;
-using namespace sofa::core::objectmodel;
-using sofa::helper::system::thread::CTime;
-using sofa::helper::system::thread::ctime_t;
 
 template<class TMatrix, class TVector>
 SparseCholeskySolver<TMatrix,TVector>::SparseCholeskySolver()
@@ -112,14 +104,5 @@ void SparseCholeskySolver<TMatrix,TVector>::invert(Matrix& M)
     N = cs_chol (&A, S) ;		/* numeric Cholesky factorization */
 }
 
-using namespace sofa::linearalgebra;
 
-int SparseCholeskySolverClass = core::RegisterObject("Direct linear solver based on Sparse Cholesky factorization, implemented with the CSPARSE library")
-        .add< SparseCholeskySolver< CompressedRowSparseMatrix<double>,FullVector<double> > >(true)
-        .add< SparseCholeskySolver< CompressedRowSparseMatrix<float>,FullVector<float> > >()
-        ;
-
-template class SOFA_SOFASPARSESOLVER_API SparseCholeskySolver< CompressedRowSparseMatrix<double>,FullVector<double> >;
-template class SOFA_SOFASPARSESOLVER_API SparseCholeskySolver< CompressedRowSparseMatrix<float>,FullVector<float> >;
-
-} // namespace sofa::component::linearsolver
+} // namespace sofa::component::linearsolver::direct
