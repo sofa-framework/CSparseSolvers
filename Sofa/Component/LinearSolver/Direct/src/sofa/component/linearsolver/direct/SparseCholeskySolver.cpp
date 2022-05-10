@@ -19,9 +19,8 @@
 *                                                                             *
 * Contact information: contact@sofa-framework.org                             *
 ******************************************************************************/
-#define SOFA_COMPONENT_LINEARSOLVER_SPARSELUSOLVER_CPP
-#include <sofa/component/linearsolver/direct/config.h>
-#include <sofa/component/linearsolver/direct/SparseLUSolver.inl>
+#define SOFA_COMPONENT_LINEARSOLVER_SPARSECHOLESKYSOLVER_CPP
+#include <sofa/component/linearsolver/direct/SparseCholeskySolver.inl>
 #include <sofa/core/ObjectFactory.h>
 
 namespace sofa::component::linearsolver::direct
@@ -29,13 +28,17 @@ namespace sofa::component::linearsolver::direct
 
 using namespace sofa::linearalgebra;
 
-int SparseLUSolverClass = core::RegisterObject("Direct linear solver based on Sparse LU factorization, implemented with the CSPARSE library")
-        .add< SparseLUSolver< CompressedRowSparseMatrix<SReal>, FullVector<SReal> > >()
-        .add< SparseLUSolver< CompressedRowSparseMatrix<type::Mat<3,3,SReal> >,FullVector<SReal> > >()
-        ;
+#ifdef SOFA_FLOAT
+SOFA_PRAGMA_WARNING("SparseCholeskySolver does not support float as scalar.")
+#else // SOFA_DOUBLE
+int SparseCholeskySolverClass =
+    core::RegisterObject(
+        "Direct linear solver based on Sparse Cholesky factorization, implemented with the "
+        "CSPARSE library")
+        .add<SparseCholeskySolver<CompressedRowSparseMatrix<SReal>, FullVector<SReal> > >();
 
-template class SOFA_COMPONENT_LINEARSOLVER_DIRECT_API SparseLUSolver< CompressedRowSparseMatrix<SReal>, FullVector<SReal> >;
-template class SOFA_COMPONENT_LINEARSOLVER_DIRECT_API SparseLUSolver< CompressedRowSparseMatrix<type::Mat<3,3,SReal> >, FullVector<SReal> >;
+template class SOFA_COMPONENT_LINEARSOLVER_DIRECT_API
+    SparseCholeskySolver<CompressedRowSparseMatrix<SReal>, FullVector<SReal> >;
+#endif // SOFA_FLOAT
 
 } // namespace sofa::component::linearsolver::direct
-
