@@ -21,10 +21,11 @@
 ******************************************************************************/
 #pragma once
 
-#include <sofa/component/linearsolver/direct/SparseCholeskySolver.h>
+#include <CSparseSolvers/SparseCholeskySolver.h>
+#include <sofa/component/linearsolver/direct/SparseCommon.h>
 #include <sofa/helper/ScopedAdvancedTimer.h>
 
-namespace sofa::component::linearsolver::direct
+namespace csparsesolvers
 {
 
 template<class TMatrix, class TVector>
@@ -110,7 +111,7 @@ void SparseCholeskySolver<TMatrix,TVector>::invert(Matrix& M)
     {
         SCOPED_TIMER_VARNAME(factorization_permTimer, "factorization_perm");
 
-        notSameShape = compareMatrixShape( A.n , A.p , A.i, Previous_colptr.size()-1 , Previous_colptr.data() , Previous_rowind.data() );
+        notSameShape = sofa::component::linearsolver::direct::compareMatrixShape( A.n , A.p , A.i, Previous_colptr.size()-1 , Previous_colptr.data() , Previous_rowind.data() );
 
         switch (d_typePermutation.getValue().getSelectedId() )
         {
@@ -129,7 +130,7 @@ void SparseCholeskySolver<TMatrix,TVector>::invert(Matrix& M)
                     perm.resize(A.n);
                     iperm.resize(A.n);
 
-                    fillReducingPermutation( A , iperm.data(), perm.data() ); // compute the fill reducing permutation
+                    sofa::component::linearsolver::direct::fillReducingPermutation(A.n, A.p, A.i , iperm.data(), perm.data() ); // compute the fill reducing permutation
                 }
 
                 permuted_A = cs_permute( &A , perm.data() , iperm.data() , 1);
@@ -167,7 +168,7 @@ void SparseCholeskySolver<TMatrix,TVector>::invert(Matrix& M)
 }
 
 template <class TMatrix, class TVector>
-void SparseCholeskySolver<TMatrix, TVector>::parse(core::objectmodel::BaseObjectDescription* arg)
+void SparseCholeskySolver<TMatrix, TVector>::parse(sofa::core::objectmodel::BaseObjectDescription* arg)
 {
     if (arg->getAttribute("verbose"))
     {
@@ -203,17 +204,17 @@ css* SparseCholeskySolver<TMatrix,TVector>::symbolic_Chol(cs *A)
     int n, *c, *post;
     cs *C ;
     css *S ;
-    if (!A) return (NULL) ;		    // check inputs 
+    if (!A) return (NULL) ;		    // check inputs
     n = A->n ;
-    S = (css*)cs_calloc (1, sizeof (css)) ;	    // allocate symbolic analysis 
-    if (!S) return (NULL) ;		    // out of memory 
-    C = cs_symperm (A, S->Pinv, 0) ;	    // C = spones(triu(A(P,P))) 
-    S->parent = cs_etree (C, 0) ;	    // find etree of C 
-    post = cs_post (n, S->parent) ;	    // postorder the etree 
-    c = cs_counts (C, S->parent, post, 0) ; // find column counts of chol(C) 
+    S = (css*)cs_calloc (1, sizeof (css)) ;	    // allocate symbolic analysis
+    if (!S) return (NULL) ;		    // out of memory
+    C = cs_symperm (A, S->Pinv, 0) ;	    // C = spones(triu(A(P,P)))
+    S->parent = cs_etree (C, 0) ;	    // find etree of C
+    post = cs_post (n, S->parent) ;	    // postorder the etree
+    c = cs_counts (C, S->parent, post, 0) ; // find column counts of chol(C)
     cs_free (post) ;
     cs_spfree (C) ;
-    S->cp = (int*)cs_malloc (n+1, sizeof (int)) ; // find column pointers for L 
+    S->cp = (int*)cs_malloc (n+1, sizeof (int)) ; // find column pointers for L
     S->unz = S->lnz = cs_cumsum (S->cp, c, n) ;
     // we do not use the permutation of SuiteSparse
     S->Q = nullptr ; // permutation on columns set to identity

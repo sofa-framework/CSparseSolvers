@@ -21,15 +21,15 @@
 ******************************************************************************/
 #pragma once
 
-#include <sofa/component/linearsolver/direct/config.h>
+#include <CSparseSolvers/config.h>
 
 #include <sofa/core/behavior/LinearSolver.h>
 #include <sofa/component/linearsolver/iterative/MatrixLinearSolver.h>
 #include <sofa/simulation/MechanicalVisitor.h>
-#include <sofa/component/linearsolver/direct/SparseCommon.h>
 #include <sofa/helper/OptionsGroup.h>
+#include <csparse.h>
 
-namespace sofa::component::linearsolver::direct
+namespace csparsesolvers
 {
 
 // Direct linear solver based on Sparse Cholesky factorization, implemented with the CSPARSE library
@@ -48,12 +48,9 @@ public:
     void solve (Matrix& M, Vector& x, Vector& b) override;
     void invert(Matrix& M) override;
 
-    void parse(core::objectmodel::BaseObjectDescription *arg) override;
+    void parse(sofa::core::objectmodel::BaseObjectDescription *arg) override;
 
 protected:
-
-    SOFA_ATTRIBUTE_DEPRECATED__SOLVER_DIRECT_VERBOSEDATA()
-    Data<bool> f_verbose; ///< Dump system state at each iteration
 
     cs A;
     cs* permuted_A;
@@ -61,20 +58,20 @@ protected:
     csn *N;
     int * A_i; ///< row indices, size nzmax
     int * A_p; ///< column pointers (size n+1) or col indices (size nzmax)
-    type::vector<int> Previous_colptr,Previous_rowind; ///<  shape of the matrix at the previous step
-    type::vector<int> perm,iperm; ///< fill reducing permutation
-    type::vector<double> A_x,z_tmp,r_tmp,tmp;
+    sofa::type::vector<int> Previous_colptr,Previous_rowind; ///<  shape of the matrix at the previous step
+    sofa::type::vector<int> perm,iperm; ///< fill reducing permutation
+    sofa::type::vector<double> A_x,z_tmp,r_tmp,tmp;
     bool notSameShape;
 
-    Data<sofa::helper::OptionsGroup> d_typePermutation;
+    sofa::Data<sofa::helper::OptionsGroup> d_typePermutation;
 
     void suiteSparseFactorization(bool applyPermutation);
 
     css* symbolic_Chol(cs *A);
 };
 
-#if !defined(SOFA_COMPONENT_LINEARSOLVER_SPARSECHOLESKYSOLVER_CPP)
-extern template class SOFA_COMPONENT_LINEARSOLVER_DIRECT_API SparseCholeskySolver< sofa::linearalgebra::CompressedRowSparseMatrix<SReal>, sofa::linearalgebra::FullVector<SReal> >;
+#if !defined(CSPARSESOLVERS_SPARSECHOLESKYSOLVER_CPP)
+extern template class SOFA_CSPARSESOLVERS_API SparseCholeskySolver< sofa::linearalgebra::CompressedRowSparseMatrix<SReal>, sofa::linearalgebra::FullVector<SReal> >;
 #endif
 
 } // namespace sofa::component::linearsolver::direct

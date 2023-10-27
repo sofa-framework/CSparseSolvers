@@ -20,29 +20,28 @@
 * Contact information: contact@sofa-framework.org                             *
 ******************************************************************************/
 #pragma once
-#include <sofa/component/linearsolver/direct/config.h>
+#include <CSparseSolvers/config.h>
 
 #include <sofa/component/linearsolver/iterative/MatrixLinearSolver.h>
 #include <csparse.h>
-#include <sofa/component/linearsolver/direct/SparseCommon.h>
 #include <sofa/helper/OptionsGroup.h>
 
-namespace sofa::component::linearsolver::direct
+namespace csparsesolvers
 {
 
 //defaut structure for a LU factorization
 template<class Real>
-class SparseLUInvertData : public MatrixInvertData {
+class SparseLUInvertData : public sofa::component::linearsolver::MatrixInvertData {
 public :
 
     css *S; ///< store the permutations and the number of non null values by rows and by lines of the LU factorization
     csn *N; ///< store the partial pivot and the LU factorization
     cs A;
     cs* permuted_A;
-    type::vector<int> perm,iperm; ///< fill reducing permutation
-    type::vector<int> Previous_colptr,Previous_rowind; ///< shape of the matrix at the previous step
-    type::vector<sofa::SignedIndex> A_i, A_p;
-    type::vector<Real> A_x;
+    sofa::type::vector<int> perm,iperm; ///< fill reducing permutation
+    sofa::type::vector<int> Previous_colptr,Previous_rowind; ///< shape of the matrix at the previous step
+    sofa::type::vector<sofa::SignedIndex> A_i, A_p;
+    sofa::type::vector<Real> A_x;
     Real * tmp;
     bool notSameShape;
     SparseLUInvertData()
@@ -59,7 +58,7 @@ public :
 };
 
 // Direct linear solver based on Sparse LU factorization, implemented with the CSPARSE library
-template<class TMatrix, class TVector, class TThreadManager= NoThreadManager>
+template<class TMatrix, class TVector, class TThreadManager= sofa::component::linearsolver::NoThreadManager>
 class SparseLUSolver : public sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector,TThreadManager>
 {
 public:
@@ -71,11 +70,8 @@ public:
 
     typedef sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector,TThreadManager> Inherit;
 
-    SOFA_ATTRIBUTE_DEPRECATED__SOLVER_DIRECT_VERBOSEDATA()
-    Data<bool> f_verbose; ///< Dump system state at each iteration
+    sofa::Data<double> f_tol; ///< tolerance of factorization
 
-    Data<double> f_tol; ///< tolerance of factorization
-    
     void solve (Matrix& M, Vector& x, Vector& b) override;
     void invert(Matrix& M) override;
 
@@ -83,16 +79,16 @@ public:
 
     bool supportNonSymmetricSystem() const override { return true; }
 
-    void parse(core::objectmodel::BaseObjectDescription *arg) override;
+    void parse(sofa::core::objectmodel::BaseObjectDescription *arg) override;
 
 protected :
 
-    Data<sofa::helper::OptionsGroup> d_typePermutation;
-    Data<int> d_L_nnz; ///< Number of non-zero values in the lower triangular matrix of the factorization. The lower, the faster the system is solved.
+    sofa::Data<sofa::helper::OptionsGroup> d_typePermutation;
+    sofa::Data<int> d_L_nnz; ///< Number of non-zero values in the lower triangular matrix of the factorization. The lower, the faster the system is solved.
 
     css* symbolic_LU(cs *A);
 
-    MatrixInvertData * createInvertData() override {
+    sofa::component::linearsolver::MatrixInvertData * createInvertData() override {
         return new SparseLUInvertData<Real>();
     }
 
@@ -101,8 +97,9 @@ protected :
 };
 
 
-#if !defined(SOFA_COMPONENT_LINEARSOLVER_SPARSELUSOLVER_CPP)
-extern template class SOFA_COMPONENT_LINEARSOLVER_DIRECT_API SparseLUSolver< sofa::linearalgebra::CompressedRowSparseMatrix< SReal>, sofa::linearalgebra::FullVector<SReal> >;
+#if !defined(CSPARSESOLVERS_SPARSELUSOLVER_CPP)
+extern template class SOFA_CSPARSESOLVERS_API SparseLUSolver< sofa::linearalgebra::CompressedRowSparseMatrix< SReal>, sofa::linearalgebra::FullVector<SReal> >;
+extern template class SOFA_CSPARSESOLVERS_API SparseLUSolver< sofa::linearalgebra::CompressedRowSparseMatrix<sofa::type::Mat<3,3,SReal>>, sofa::linearalgebra::FullVector<SReal> >;
 #endif
 
 } // namespace sofa::component::linearsolver::direct
