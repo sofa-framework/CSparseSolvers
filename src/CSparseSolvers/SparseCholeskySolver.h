@@ -28,16 +28,22 @@
 #include <sofa/simulation/MechanicalVisitor.h>
 #include <sofa/helper/OptionsGroup.h>
 #include <csparse.h>
+#include <sofa/component/linearsolver/ordering/OrderingMethodAccessor.h>
+
 
 namespace csparsesolvers
 {
 
 // Direct linear solver based on Sparse Cholesky factorization, implemented with the CSPARSE library
 template<class TMatrix, class TVector>
-class SparseCholeskySolver : public sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector>
+class SparseCholeskySolver :
+    public sofa::component::linearsolver::ordering::OrderingMethodAccessor<sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector> >
 {
 public:
-    SOFA_CLASS(SOFA_TEMPLATE2(SparseCholeskySolver,TMatrix,TVector),SOFA_TEMPLATE2(sofa::component::linearsolver::MatrixLinearSolver,TMatrix,TVector));
+    SOFA_CLASS(
+        SOFA_TEMPLATE2(SparseCholeskySolver,TMatrix,TVector),
+        SOFA_TEMPLATE(sofa::component::linearsolver::ordering::OrderingMethodAccessor, SOFA_TEMPLATE2(sofa::component::linearsolver::MatrixLinearSolver,TMatrix,TVector))
+    );
 
     typedef TMatrix Matrix;
     typedef TVector Vector;
@@ -48,14 +54,12 @@ public:
     void solve (Matrix& M, Vector& x, Vector& b) override;
     void invert(Matrix& M) override;
 
-    void parse(sofa::core::objectmodel::BaseObjectDescription *arg) override;
-
 protected:
 
-    cs A;
+    cs m_matrixToInvert;
     cs* permuted_A;
-    css *S;
-    csn *N;
+    css *m_symbolicFactorization { nullptr };
+    csn* m_numericFactorization { nullptr };
     int * A_i; ///< row indices, size nzmax
     int * A_p; ///< column pointers (size n+1) or col indices (size nzmax)
     sofa::type::vector<int> Previous_colptr,Previous_rowind; ///<  shape of the matrix at the previous step
@@ -63,10 +67,7 @@ protected:
     sofa::type::vector<double> A_x,z_tmp,r_tmp,tmp;
     bool notSameShape;
 
-    sofa::Data<sofa::helper::OptionsGroup> d_typePermutation;
-
-    void suiteSparseFactorization(bool applyPermutation);
-
+    sofa::core::objectmodel::lifecycle::DeprecatedData d_typePermutation{this, "v24.06", "v24.12", "applyPermutation", "Ordering method is now defined using ordering components"};
     css* symbolic_Chol(cs *A);
 };
 
