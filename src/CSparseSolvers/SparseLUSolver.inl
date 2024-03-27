@@ -23,6 +23,7 @@
 
 #include <CSparseSolvers/SparseLUSolver.h>
 #include <sofa/component/linearsolver/direct/SparseCommon.h>
+#include <sofa/core/behavior/BaseOrderingMethod.h>
 #include <sofa/helper/ScopedAdvancedTimer.h>
 
 namespace csparsesolvers
@@ -40,13 +41,8 @@ using std::endl;
 template<class TMatrix, class TVector,class TThreadManager>
 SparseLUSolver<TMatrix,TVector,TThreadManager>::SparseLUSolver()
     : f_tol( initData(&f_tol,0.001,"tolerance","tolerance of factorization") )
-    , d_typePermutation(initData(&d_typePermutation , "permutation", "Type of fill reducing permutation"))
     , d_L_nnz(initData(&d_L_nnz, 0, "L_nnz", "Number of non-zero values in the lower triangular matrix of the factorization. The lower, the faster the system is solved.", true, true))
-{
-    sofa::helper::OptionsGroup d_typePermutationOptions{"None", "SuiteSparse", "METIS"};
-    d_typePermutationOptions.setSelectedItem(0); // default None
-    d_typePermutation.setValue(d_typePermutationOptions);
-}
+{}
 
 template <class TMatrix, class TVector, class TThreadManager>
 void SparseLUSolver<TMatrix, TVector, TThreadManager>::parse(
@@ -68,43 +64,11 @@ void SparseLUSolver<TMatrix,TVector,TThreadManager>::solve (Matrix& M, Vector& x
     SparseLUInvertData<Real> * invertData = (SparseLUInvertData<Real>*) this->getMatrixInvertData(&M);
     const int n = invertData->A.n;
 
-    {
-        SCOPED_TIMER_VARNAME(solveTimer, "solve");
-        switch( d_typePermutation.getValue().getSelectedId() )
-        {
-
-            case 0://None->Identity
-
-            {
-                cs_ipvec (n, nullptr,  b.ptr(), x.ptr()) ;	// copy
-                cs_lsolve (invertData->N->L, x.ptr() ) ;		// x = L\x
-                cs_usolve (invertData->N->U, x.ptr() ) ;		// x = U\x
-                break;
-            }
-
-            case 1://SuiteSparse
-            {
-                cs_ipvec (n, invertData->N->Pinv, b.ptr(), invertData->tmp) ;	// x = P*b , partial pivot
-                cs_lsolve (invertData->N->L, invertData->tmp) ;		// x = L\x
-                cs_usolve (invertData->N->U, invertData->tmp) ;		// x = U\x
-                cs_ipvec (n, invertData->S->Q, invertData->tmp, x.ptr()) ;	// x = Q*x fill reducing permutation on columns only
-                break;
-            }
-
-            case 2://METIS
-            {
-                // no partial pivoting
-                cs_pvec (n, invertData->perm.data() , b.ptr(), invertData->tmp) ; // x = P*b permutation on rows
-                cs_lsolve (invertData->N->L, invertData->tmp) ;		// x = L\x
-                cs_usolve (invertData->N->U, invertData->tmp) ;		// x = U\x
-                cs_pvec (n, invertData->iperm.data() , invertData->tmp , x.ptr()) ;	// x = Q*x permutation on columns
-                break;
-            }
-
-            default:
-                break;
-        }
-    }
+    SCOPED_TIMER_VARNAME(solveTimer, "solve");
+    cs_pvec (n, invertData->perm.data() , b.ptr(), invertData->tmp) ; // x = P*b permutation on rows
+    cs_lsolve (invertData->N->L, invertData->tmp) ;		// x = L\x
+    cs_usolve (invertData->N->U, invertData->tmp) ;		// x = U\x
+    cs_pvec (n, invertData->iperm.data() , invertData->tmp , x.ptr()) ;	// x = Q*x permutation on columns
 }
 
 template<class TMatrix, class TVector,class TThreadManager>
@@ -153,64 +117,34 @@ void SparseLUSolver<TMatrix,TVector,TThreadManager>::invert(Matrix& M)
 
     {
         SCOPED_TIMER_VARNAME(factorizationTimer, "factorization");
-        switch( d_typePermutation.getValue().getSelectedId() )
+        if (invertData->notSameShape )
         {
-            case 0://None->Identity
-            {
-                if (invertData->S)
-                {
-                    cs_sfree(invertData->S);
-                }
-                invertData->S = symbolic_LU( &(invertData->A) ) ;	// ordering and symbolic analysis
-                invertData->N = cs_lu (&invertData->A, invertData->S, f_tol.getValue()) ;		// numeric LU factorization
-                break;
-            }
+            invertData->perm.resize(invertData->A.n);
+            invertData->iperm.resize(invertData->A.n);
 
-            case 1://SuiteSparse
-            {
-                if (invertData->notSameShape )
-                {
-                    if (invertData->S)
-                    {
-                        cs_sfree(invertData->S);
-                    }
-                    invertData->S = cs_sqr (&invertData->A, 1 , 0) ; // Suitsparse compute fill reducing permutation for LU decomposition
-                }
-                invertData->N = cs_lu (&invertData->A, invertData->S, f_tol.getValue()) ;		// numeric LU factorization
-                break;
-            }
+            sofa::core::behavior::BaseOrderingMethod::SparseMatrixPattern pattern;
+            pattern.matrixSize = invertData->A.n;
+            pattern.numberOfNonZeros = invertData->A.nzmax;
+            pattern.rowBegin = invertData->A.p;
+            pattern.colsIndex = invertData->A.i;
 
-            case 2://Metis
-            {
-                if (invertData->notSameShape )
-                {
-                    invertData->perm.resize(invertData->A.n);
-                    invertData->iperm.resize(invertData->A.n);
-
-                    sofa::component::linearsolver::direct::fillReducingPermutation(invertData->A.n, invertData->A.p, invertData->A.i, invertData->perm.data(), invertData->iperm.data() ); //METIS compute the fill reducing permutation
-                }
-
-                invertData->permuted_A = cs_permute(&(invertData->A), invertData->iperm.data(), invertData->perm.data(), 1);
-
-                if (invertData->notSameShape )
-                {
-                    if (invertData->S)
-                    {
-                        cs_sfree(invertData->S);
-                    }
-                    invertData->S = symbolic_LU( invertData->permuted_A );
-                }
-
-                invertData->N = cs_lu ( invertData->permuted_A, invertData->S, f_tol.getValue()) ;		// numeric LU factorization
-
-                cs_free(invertData->permuted_A); // prevent memory leak
-
-                break;
-            }
-
-            default:
-                break;
+            this->l_orderingMethod->computePermutation(pattern, invertData->perm.data(), invertData->iperm.data());
         }
+
+        invertData->permuted_A = cs_permute(&(invertData->A), invertData->iperm.data(), invertData->perm.data(), 1);
+
+        if (invertData->notSameShape )
+        {
+            if (invertData->S)
+            {
+                cs_sfree(invertData->S);
+            }
+            invertData->S = symbolic_LU( invertData->permuted_A );
+        }
+
+        invertData->N = cs_lu ( invertData->permuted_A, invertData->S, f_tol.getValue()) ;		// numeric LU factorization
+
+        cs_free(invertData->permuted_A); // prevent memory leak
     }
 
     d_L_nnz.setValue(invertData->N->L->nzmax);

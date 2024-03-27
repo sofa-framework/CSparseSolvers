@@ -24,6 +24,7 @@
 
 #include <sofa/component/linearsolver/iterative/MatrixLinearSolver.h>
 #include <csparse.h>
+#include <sofa/component/linearsolver/ordering/OrderingMethodAccessor.h>
 #include <sofa/helper/OptionsGroup.h>
 
 namespace csparsesolvers
@@ -59,10 +60,15 @@ public :
 
 // Direct linear solver based on Sparse LU factorization, implemented with the CSPARSE library
 template<class TMatrix, class TVector, class TThreadManager= sofa::component::linearsolver::NoThreadManager>
-class SparseLUSolver : public sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector,TThreadManager>
+class SparseLUSolver :
+    public sofa::component::linearsolver::ordering::OrderingMethodAccessor<sofa::component::linearsolver::MatrixLinearSolver<TMatrix,TVector,TThreadManager> >
 {
 public:
-    SOFA_CLASS(SOFA_TEMPLATE3(SparseLUSolver,TMatrix,TVector,TThreadManager),SOFA_TEMPLATE3(sofa::component::linearsolver::MatrixLinearSolver,TMatrix,TVector,TThreadManager));
+    SOFA_CLASS(
+        SOFA_TEMPLATE3(SparseLUSolver,TMatrix,TVector,TThreadManager),
+        SOFA_TEMPLATE(sofa::component::linearsolver::ordering::OrderingMethodAccessor,
+            SOFA_TEMPLATE3(sofa::component::linearsolver::MatrixLinearSolver,TMatrix,TVector,TThreadManager))
+    );
 
     typedef TMatrix Matrix;
     typedef TVector Vector;
@@ -83,7 +89,7 @@ public:
 
 protected :
 
-    sofa::Data<sofa::helper::OptionsGroup> d_typePermutation;
+    sofa::core::objectmodel::lifecycle::DeprecatedData d_typePermutation{this, "v24.06", "v24.12", "applyPermutation", "Ordering method is now defined using ordering components"};
     sofa::Data<int> d_L_nnz; ///< Number of non-zero values in the lower triangular matrix of the factorization. The lower, the faster the system is solved.
 
     css* symbolic_LU(cs *A);
