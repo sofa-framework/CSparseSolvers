@@ -124,7 +124,7 @@ void SparseCholeskySolver<TMatrix,TVector>::invert(Matrix& M)
         } // symbolic analysis
 
         m_numericFactorization = cs_chol (permuted_A, m_symbolicFactorization) ;		// numeric Cholesky factorization
-        assert(N);
+        assert(m_numericFactorization);
 
         cs_free(permuted_A);
     }
