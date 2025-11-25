@@ -31,14 +31,14 @@ using namespace sofa::linearalgebra;
 #ifdef SOFA_FLOAT
 SOFA_PRAGMA_WARNING("SparseCholeskySolver does not support float as scalar.")
 #else // SOFA_DOUBLE
-int SparseCholeskySolverClass =
-    sofa::core::RegisterObject(
-        "Direct linear solver based on Sparse Cholesky factorization, implemented with the "
-        "CSPARSE library")
-        .add<SparseCholeskySolver<CompressedRowSparseMatrix<SReal>, FullVector<SReal> > >();
 
-template class SOFA_CSPARSESOLVERS_API
-    SparseCholeskySolver<CompressedRowSparseMatrix<SReal>, FullVector<SReal> >;
+void registerSparseCholeskySolver(sofa::core::ObjectFactory* factory)
+{
+    factory->registerObjects(sofa::core::ObjectRegistrationData("Direct linear solver based on Sparse Cholesky factorization, implemented with the CSPARSE library")
+    .add<SparseCholeskySolver<CompressedRowSparseMatrix<SReal>, FullVector<SReal> > >());
+}
+
+template class SOFA_CSPARSESOLVERS_API SparseCholeskySolver<CompressedRowSparseMatrix<SReal>, FullVector<SReal> >;
 #endif // SOFA_FLOAT
 
 } // namespace sofa::component::linearsolver::direct
